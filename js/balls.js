@@ -1,0 +1,466 @@
+
+/**
+ * Controls the drawing and interactivity of a ball-based physics game on an
+ * HTML 5 canvas element.
+ * 
+ * @author Shawn Hussey
+ */
+
+var GRAV_EARTH = new Vector(0, 9.81);
+var GRAV_NONE = new Vector(0, 0);
+
+var Constants = {
+	//physics
+	restitution: 0.75,
+	gravitation: GRAV_EARTH,
+	
+	//rendering
+	canvasPadding: 50,
+	canvasColor: "#FFFFFF" 
+};
+
+var changed = false;
+var resized = false;
+
+var context;	//drawing context
+var width;
+var height;
+
+/*
+ * Ball creation stuff. 
+ */
+var createMode = false;	//creating a ball?
+var tempBall;			//current ball-in-creation
+var speedTarget;		//user's target location (speed reference) 
+
+var balls = [];
+var colors = [
+	"#FF0000",	//red
+	"#FFCC00",	//orange
+	"#FFFF00",	//yellow
+	"#00FF00",	//green	
+	"#0000FF",	//blue
+	"#4F2F4F",	//purple
+	"#000000",	//black
+//	"#FFFFFF",	//white
+	"#FF92BB",	//pink
+	"#603311"	//brown
+];
+
+function gravityOff() {
+	Constants.gravitation = GRAV_NONE;
+	applyGravity();
+}
+
+function gravityOn() {
+	Constants.gravitation = GRAV_EARTH;
+	applyGravity();
+}
+
+function applyGravity() {
+	for (i in balls) {
+		var ball = balls[i];
+		ball.setAcceleration(Constants.gravitation);
+	}
+}
+
+/**
+ * Draws the current frame of the Ball application on the specified canvas.
+ *  
+ * @param canvas	The canvas DOM element to draw on. 
+ */
+function drawCanvas(context) {	
+	drawBackground(context);
+	for (i in balls) {
+		var ball = balls[i];
+		if (ball) {
+			drawBall(context, ball);
+		}
+	}
+	if (createMode) {
+		//draw the ball in creation
+		drawBall(context, tempBall);
+		
+		//draw the guideline, if it exists
+		drawGuide(context, tempBall, target);
+	}
+}
+
+function drawBackground(context) {
+	var oldFill = context.fillStyle;
+	context.fillStyle = Constants.canvasColor;
+	context.fillRect(0, 0, width, height);
+	context.fillStyle = oldFill;
+}
+
+function drawGuide(context, ball, vector) {
+	var oldStroke = context.strokeStyle;
+	context.strokeStyle = "red";
+	context.beginPath();
+	context.moveTo(ball.position.x, ball.position.y);
+	context.lineTo(vector.x, vector.y);
+	context.closePath();
+	context.stroke();
+	context.strokeStyle = oldStroke;
+}
+
+function drawBall(context, ball) {
+	var x = ball.position.x;
+	var y = ball.position.y;
+	var radius = ball.radius;
+	var startAngle = 0;
+	var endAngle = 2*Math.PI;
+	var clockwise = true;
+
+	var oldFill = context.fillStyle;
+//	var oldStroke = context.strokeStyle;
+	context.fillStyle = ball.color;
+//	context.strokeStyle = "black";
+	context.beginPath();
+	context.arc(x, y, radius, startAngle, endAngle, clockwise);
+	context.closePath();
+	context.fill();
+//	context.stroke();
+	context.fillStyle = oldFill;
+//	context.strokeStyle = oldStroke;
+}
+
+function step() {
+	for (i in balls) {
+		var ball = balls[i];
+		if (ball) {
+			changed |= ball.stepPosition();
+		}
+	}
+	for (i in balls) {
+		var ball = balls[i];
+		if (ball) {
+			changed |= resolveCollisions(ball);
+		}
+	}
+	for (i in balls) {
+		var ball = balls[i];
+		if (ball) {
+			changed |= ball.stepVelocity();
+		}
+	}
+	
+	// check for resize
+	changed |= resized;
+	if (resized) {
+		resized = false;
+	}
+	
+	if (changed) {
+		drawCanvas(context);
+	}
+	
+}
+
+function resolveCollisions(ball) {
+	var changed = false;
+	for (i in balls) {
+		var other = balls[i];
+		if (other && ball.isColliding(other)) {
+			ball.collide(other);
+			changed = true;
+		}
+	}
+	ball.collideBounds();
+	return changed;
+}
+
+function addBall(ball) {
+	balls.push(ball);
+}
+
+function removeBall(ball) {
+	var i = 0;
+	for (i in balls) {
+		var found = balls[i];
+		if (found == ball) {
+			balls.splice(i, i);
+			return found;
+		}
+	}
+	return null;
+}
+
+function getRandomColor() {
+	var i = Math.floor(Math.random() * colors.length);
+	return colors[i];
+}
+
+/*========Vector Class========*/
+function Vector(x, y) {
+	//default parameter values 
+	if (!x){
+		x = 0;
+	}
+	if (!y){
+		y = 0;
+	}
+	
+	this.x = x;
+	this.y = y;
+
+	this.getLength = function() {
+		return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
+	}
+	
+	this.normalized = function() {
+		var length = this.getLength();
+		var x = this.x / length;
+		var y = this.y / length;
+		return new Vector(x, y);
+	}
+	
+	this.add = function(that) {
+		var x = this.x + that.x;
+		var y = this.y + that.y;
+		return new Vector(x, y);
+	}
+	
+	this.subtract = function(that) {
+		var x = this.x - that.x;
+		var y = this.y - that.y;
+		return new Vector(x, y);
+	}
+	
+	this.dotProduct = function(that) {
+		return ( (this.x * that.x) + (this.y * that.y) );
+	}
+	
+	this.multiplyScalar = function(scalar) {
+		var x = (this.x * scalar);
+		var y = (this.y * scalar);
+		return new Vector(x, y);
+	}
+}
+
+/*========Ball Class========*/
+function Ball(x, y, radius, color) {
+	if (!color) {
+		color = getRandomColor();
+	}
+	
+	this.position = new Vector(x,y);
+	this.radius = radius;
+	this.mass = 1;
+
+	this.velocity = new Vector();
+	this.acceleration = Constants.gravitation;
+	
+	this.color = color;
+	
+	this.setAcceleration = function(accel) {
+		this.acceleration = accel;
+	}
+
+	this.stepVelocity = function() {
+		var changed = false;
+		if (this.acceleration.getLength()) {
+			this.velocity = this.velocity.add(this.acceleration);
+		}
+		return changed;
+	};
+	
+	this.stepPosition = function() {
+		var changed = false;
+		if (this.velocity.getLength()) {
+			this.position = this.position.add(this.velocity);
+			changed = true;
+		}
+		return changed;
+	};
+	
+	this.isColliding = function(that) {
+		if (!(that instanceof Ball)) {
+			return false;
+		}
+		if (this == that) {
+			return false;
+		}
+		var delta = this.position.subtract(that.position);
+		var distance = delta.getLength();
+		var range = this.radius + that.radius;
+		
+		return (distance <= range);
+	};
+	
+	this.collide = function(that) {
+		var delta = this.position.subtract(that.position);
+		var d = delta.getLength();
+		// minimum translation distance
+		var mtd = delta.multiplyScalar(((this.radius + that.radius)-d)/d);
+		
+		//inverse mass quantities
+		var im1 = 1.0/this.mass;
+		var im2 = 1.0/that.mass;
+		
+		/** # */
+		
+		// push-pull them apart based off their mass
+	    this.position = this.position.add(mtd.multiplyScalar(im1 / (im1 + im2)));
+	    that.position = that.position.subtract(mtd.multiplyScalar(im2 / (im1 + im2)));
+
+	    
+	    // impact speed
+	    var v = (this.velocity.subtract(that.velocity));
+	    var vn = v.dotProduct(mtd.normalized());
+	    
+	    // sphere intersecting but moving away from each other already
+	    if (vn > 0.0){
+	    	//alert("Bump1: " + vn);
+		return;
+	    }
+	    //alert("Bump2: " + vn);
+	    // collision impulse
+	    var i = (-(1.0 + Constants.restitution) * vn) / (im1 + im2);
+	    var impulse = mtd.normalized().multiplyScalar(i);
+
+	    // change in momentum
+	    this.velocity = this.velocity.add(impulse.multiplyScalar(im1));
+	    that.velocity = that.velocity.subtract(impulse.multiplyScalar(im2));
+	};
+	
+	this.collideBounds = function() {
+		if ((this.position.x - this.radius <= 0) 
+				&& (this.velocity.x < 0)) { 
+			this.velocity.x = -this.velocity.x * Constants.restitution;
+			this.position.x = 0 + this.radius; 
+		} else if ((this.position.x + this.radius >= width)
+				&& (this.velocity.x > 0) ) {
+			this.velocity.x = -this.velocity.x * Constants.restitution;
+			this.position.x = width - this.radius;
+		}
+		if (this.position.y - this.radius <= 0
+				&& (this.velocity.y < 0) ) {
+			this.velocity.y = -this.velocity.y * Constants.restitution;
+			this.position.y = 0 + this.radius;
+		} else if (this.position.y + this.radius >= height
+				&& (this.velocity.y > 0) ) {
+			this.velocity.y = -this.velocity.y * Constants.restitution;
+			this.position.y = height - this.radius;
+		}
+	};
+}
+
+function updateDimensions(canvas) {
+	var w = $(window).width() - Constants.canvasPadding;
+	var h = $(window).height() - Constants.canvasPadding;
+	
+	if (canvas.getAttribute("width") != w || canvas.getAttribute("height") != h ) {
+		canvas.setAttribute("width", w);
+		canvas.setAttribute("height", h);
+		width = w;
+		height = h;
+		resized = true;
+	}
+	
+}
+
+function getCanvasX(event) {
+	// Get the mouse position relative to the canvas element.
+	if (event.offsetX || event.offsetX == 0) {
+		return event.offsetX;
+	}else if (event.layerX || event.layerX == 0) { // Firefox
+		return event.clientX - ((Constants.canvasPadding/2) + (Constants.canvasPadding%2));
+	} 
+}
+
+function getCanvasY(event) {
+	// Get the mouse position relative to the canvas element.
+	if (event.offsetY || event.offsetY == 0) {
+		return event.offsetY;
+	}else if (event.layerY || event.layerY == 0) { // Firefox
+		return event.clientY - ((Constants.canvasPadding/2) + (Constants.canvasPadding%2));
+	} 
+}
+
+function clearBalls() {
+	balls.splice(0, balls.length);
+}
+
+$(document).ready(function() {
+	var $main = $("#main");
+	var canvas = $main.get(0);
+
+        // prevent double-click events from leaking to page
+	canvas.onselectstart = function(){return false;};
+	
+	if (canvas.getContext){  
+		context = canvas.getContext('2d');
+	} else {
+		//can't get context
+		return;
+	}
+	
+	$main.mousedown(function(event){
+		if (event.which == 1) {
+			var radius = 10;
+			var x = getCanvasX(event);
+			var y = getCanvasY(event);
+//			alert("x:"+x+", y:"+y);
+			createMode = true;
+			tempBall = new Ball(x, y, radius);
+			target = new Vector(x,y);
+		}
+	});
+	
+	$main.mousemove(function(event){
+		if (createMode) {
+			var x = getCanvasX(event);
+			var y = getCanvasY(event);
+			target.x = x;
+			target.y = y;
+		}
+	});
+	
+	$main.mouseup(function(event){
+		if (createMode) {
+			var dX = target.x - tempBall.position.x;
+			var dY = target.y - tempBall.position.y;
+			tempBall.velocity.x = dX / 3;
+			tempBall.velocity.y = dY / 3;
+			addBall(tempBall);
+			target = null;
+			tempBall = null;
+			createMode = false;
+		}
+	});
+	
+	$main.mouseover(function(event){
+		if (createMode) {
+			//TODO check if mouse1 is depressed
+			$("#main").mouseup();
+		}
+	});
+
+	$("#toggleButton").click(function(event){
+		if (Constants.gravitation.y) {
+			gravityOff();
+		} else {
+			gravityOn();
+		}
+	});
+
+	$("#resetButton").click(function(event) {
+		clearBalls();
+	});
+	
+	updateDimensions(canvas);
+	setInterval("step()", 20);
+	
+	//resize canvas with window
+	var timeout; //timeout event
+	$(window).resize(function() {
+		clearTimeout(timeout);
+		timeout = setTimeout("updateDimensions($('#main').get(0));", 50);
+	});
+	
+	$("#main").ready(function(){
+		drawBackground(context);
+	});
+});
+

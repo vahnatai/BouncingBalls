@@ -1,0 +1,20 @@
+body {
+	background-color: #000000;
+	color: #FFFFFF;
+}
+
+#main {
+	margin-left: auto;
+	margin-right: auto;
+	vertical-align: middle;
+	display: block;
+	padding: 0px;
+}
+
+#controlPanel {
+	width: 100%;
+}
+
+#controlPanel input {
+	float: right;
+}
