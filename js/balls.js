@@ -347,8 +347,8 @@ function Ball(x, y, radius, color) {
 }
 
 function updateDimensions(canvas) {
-	var w = $(window).width() - Constants.canvasPadding;
-	var h = $(window).height() - Constants.canvasPadding;
+	var w = window.innerWidth - Constants.canvasPadding;
+	var h = window.innerHeight - Constants.canvasPadding;
 	
 	if (canvas.getAttribute("width") != w || canvas.getAttribute("height") != h ) {
 		canvas.setAttribute("width", w);
@@ -382,11 +382,10 @@ function clearBalls() {
 	balls.splice(0, balls.length);
 }
 
-$(document).ready(function() {
-	var $main = $("#main");
-	var canvas = $main.get(0);
+document.addEventListener('DOMContentLoaded', function() {
+	var canvas = document.getElementById("main");
 
-        // prevent double-click events from leaking to page
+	// prevent double-click events from leaking to page
 	canvas.onselectstart = function(){return false;};
 	
 	if (canvas.getContext){  
@@ -396,7 +395,7 @@ $(document).ready(function() {
 		return;
 	}
 	
-	$main.mousedown(function(event){
+	canvas.addEventListener('mousedown', function(event){
 		if (event.which == 1) {
 			var radius = 10;
 			var x = getCanvasX(event);
@@ -408,7 +407,7 @@ $(document).ready(function() {
 		}
 	});
 	
-	$main.mousemove(function(event){
+	canvas.addEventListener('mousemove', function(event){
 		if (createMode) {
 			var x = getCanvasX(event);
 			var y = getCanvasY(event);
@@ -417,7 +416,7 @@ $(document).ready(function() {
 		}
 	});
 	
-	$main.mouseup(function(event){
+	canvas.addEventListener('mouseup', function(event){
 		if (createMode) {
 			var dX = target.x - tempBall.position.x;
 			var dY = target.y - tempBall.position.y;
@@ -430,14 +429,14 @@ $(document).ready(function() {
 		}
 	});
 	
-	$main.mouseover(function(event){
+	canvas.addEventListener('mouseover', function(event){
 		if (createMode) {
 			//TODO check if mouse1 is depressed
-			$("#main").mouseup();
+			canvas.dispatchEvent(new MouseEvent('mouseup'));
 		}
 	});
 
-	$("#toggleButton").click(function(event){
+	document.getElementById("toggleButton").addEventListener('click', function(event){
 		if (Constants.gravitation.y) {
 			gravityOff();
 		} else {
@@ -445,22 +444,20 @@ $(document).ready(function() {
 		}
 	});
 
-	$("#resetButton").click(function(event) {
+	document.getElementById("resetButton").addEventListener('click', function(event) {
 		clearBalls();
 	});
 	
 	updateDimensions(canvas);
-	setInterval("step()", 20);
+	setInterval(step, 20);
 	
 	//resize canvas with window
 	var timeout; //timeout event
-	$(window).resize(function() {
+	window.addEventListener('resize', function() {
 		clearTimeout(timeout);
-		timeout = setTimeout("updateDimensions($('#main').get(0));", 50);
+		timeout = setTimeout(function() { updateDimensions(canvas); }, 50);
 	});
 	
-	$("#main").ready(function(){
-		drawBackground(context);
-	});
+	drawBackground(context);
 });
 
